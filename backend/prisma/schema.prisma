@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users ──────────────────────────────────────────
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String?
+  username        String    @unique
+  avatarUrl       String?
+  emailVerified   Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+ 
+  games           Game[]
+  scores          Score[]
+  refreshTokens   RefreshToken[]
+  roomPlayers     RoomPlayer[]
+}
+ 
+// ── Refresh Tokens ─────────────────────────────────
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+ 
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+ 
+// ── Puzzles ────────────────────────────────────────
+model Puzzle {
+  id          String     @id @default(uuid())
+  difficulty  Difficulty
+  givens      Json       // original cell values (0 = empty)
+  solution    Json       // full solved board
+  createdAt   DateTime   @default(now())
+ 
+  games       Game[]
+}
+ 
+// ── Games ──────────────────────────────────────────
+model Game {
+  id           String     @id @default(uuid())
+  userId       String
+  puzzleId     String
+  difficulty   Difficulty
+  boardState   Json       // current cell values
+  notesState   Json       // pencil marks
+  status       GameStatus @default(ACTIVE)
+  elapsedSecs  Int        @default(0)
+  mistakes     Int        @default(0)
+  hintsUsed    Int        @default(0)
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+ 
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  puzzle       Puzzle     @relation(fields: [puzzleId], references: [id])
+  score        Score?
+ 
+  @@index([userId, status])
+}
+ 
+// ── Scores (Leaderboard) ───────────────────────────
+model Score {
+  id           String     @id @default(uuid())
+  userId       String
+  gameId       String     @unique
+  difficulty   Difficulty
+  elapsedSecs  Int
+  mistakes     Int
+  createdAt    DateTime   @default(now())
+ 
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game         Game       @relation(fields: [gameId], references: [id])
+ 
+  @@index([difficulty, elapsedSecs])
+}
+ 
+// ── Multiplayer Rooms ──────────────────────────────
+model Room {
+  id         String       @id @default(uuid())
+  code       String       @unique
+  hostId     String
+  puzzleId   String?
+  status     RoomStatus   @default(WAITING)
+  createdAt  DateTime     @default(now())
+ 
+  players    RoomPlayer[]
+}
+ 
+model RoomPlayer {
+  id       String @id @default(uuid())
+  roomId   String
+  userId   String
+  progress Int    @default(0)
+ 
+  room     Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+ 
+  @@unique([roomId, userId])
+}
+ 
+// ── Enums ──────────────────────────────────────────
+enum Difficulty { 
+  EASY  
+  MEDIUM  
+  HARD 
+}
+enum GameStatus  { 
+  ACTIVE  
+  COMPLETED  
+  ABANDONED 
+}
+enum RoomStatus  { 
+  WAITING  
+  PLAYING  
+  FINISHED 
+}
+ 
